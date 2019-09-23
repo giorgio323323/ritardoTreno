@@ -8,3 +8,6 @@ Ho deciso di trattare l'API di Trenitalia in un Raspberry che gestisce alcune fu
 
 # Riferimenti
 https://github.com/bluviolin/TrainMonitor/wiki/API-del-sistema-Viaggiatreno
+
+https://github.com/sabas/trenitalia
+
