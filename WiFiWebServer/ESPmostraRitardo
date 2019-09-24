@@ -1,1 +1,315 @@
+/* 
+ * https://www.arduino.cc/en/Reference/WiFi 
+ * https://github.com/esp8266 
+ 
+ avvia un server su indirizzo fisso
+ chiama con http://192.168.1.166/;2;0;123;123;x
+ 2: numero di led da accendere (1-4)
+ 0;123;123: RGB del colore led
+ x: ? senza si impalla tutto
+ 
+ c'è il watchDog software che resetta il sistema in caso di impallo
+ 
+ 
+
+wemos D1 R2 & mini
+cose da aggiungere
+
+reset via pin (collegare una uscita digitale al reset
+\\ip statico
+pagina per chiamata periodica, resetta se non arriva nulla
+
+14apr18 | reset hw
+        | wdog https://techtutorialsx.com/2017/01/21/esp8266-watchdog-functions/
+        | https://github.com/esp8266/Arduino/blob/4897e0006b5b0123a2fa31f67b14a3fff65ce561/doc/faq/a02-my-esp-crashes.md
+
+per gestire rst collego D0 a RST con il circuito sotto
+
+3v3 ---\/\/------D0---|<-----RST
+
+--|<--- diodo
+
+*/
+// NeoPixel Ring simple sketch (c) 2013 Shae Erisson
+// Released under the GPLv3 license to match the rest of the
+// Adafruit NeoPixel library
+
+#include <Adafruit_NeoPixel.h>
+#ifdef __AVR__
+ #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
+#endif
+
+// Which pin on the Arduino is connected to the NeoPixels?
+#define PIN        2 // On Trinket or Gemma, suggest changing this to 1
+
+// How many NeoPixels are attached to the Arduino?
+#define NUMPIXELS  4 // Popular NeoPixel ring size
+
+// When setting up the NeoPixel library, we tell it how many pixels,
+// and which pin to use to send signals. Note that for older NeoPixel
+// strips you might need to change the third parameter -- see the
+// strandtest example for more information on possible values.
+Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+#define DELAYVAL 500 // Time (in milliseconds) to pause between pixels
+
+   
+  
+#include <WiFiUdp.h>  
+#include <ESP8266WiFi.h>  
+#include <ESP8266mDNS.h>  
+
+
+#define TEMPO_CHIUSURA   30000
+#define TEMPO_HEARTBEAT  120000
+#define TEMPO_LAMP       500
+  
+// La connessione di WeMos D1 mini al un network WiFi viene  
+// realizzata usando un personal encryption WEP e WPA2  
+// Per poter sapere a quale rete connettersi bisogna  
+// effettuare un broadcast dell'SSID (nome del network)   
+  
+// definizione di due array di caratteri  
+// in cui memorizzare nome della rete WiFi e password  
+  
+
+const char* ssid     = "TIM-";
+const char* password = "";
+
+// the IP address for the shield:
+IPAddress ip      (192,168,1,166);   
+IPAddress gateway (192,168,1,254);   
+IPAddress subnet  (255,255,255,0);   
+
+// Creazione di un server web in ascolto sulla porta 80  
+// attende contenuti (pagine html, immagini, css, ecc...)  
+WiFiServer server(80);  
+  
+//    int pinLed = LED_BUILTIN;//D4;    // LED connesso tra pin D4 e ground  
+int pinLed   = LED_BUILTIN;//D4;    // LED connesso tra pin D4 e ground  
+int pinRrst  = D0; 
+long lastTime, tempoChiusura, lampTime;
+
+char str[50];
+int dato[10];
+int indice;
+ 
+void setup() {  
+    Serial.begin(115200);           // inizializzazione Serial Monitor  
+    delay(10);  
+    
+    Serial.println("\nC:\\Users\\giorgio.rancilio\\Dropbox\\MakersPgo\\iot\\wemos\\webServer");
+    Serial.println("09apr18");
+    
+    pinMode(  pinLed, OUTPUT);    
+    pinMode(pinRrst, OUTPUT);    
+
+    
+    digitalWrite(pinRrst,  HIGH);     // rst alto  
+    digitalWrite(pinLed,   LOW);      // LED inizialmente spento  
+
+    pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
+    pixels.clear(); // Set all pixel colors to 'off'
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    
+    // Connessione alla rete WiFi  
+    
+    Serial.println();  
+    Serial.println();  
+    Serial.println("------------- Avvio connessione ------------");  
+    Serial.print("Tentativo di connessione alla rete: ");  
+    Serial.println(ssid);  
+    
+    /*  
+    *  Viene impostata l'impostazione station (differente da AP o AP_STA) 
+    * La modalità STA consente all'ESP8266 di connettersi a una rete Wi-Fi 
+    * (ad esempio quella creata dal router wireless), mentre la modalità AP  
+    * consente di creare una propria rete e di collegarsi 
+    * ad altri dispositivi (ad esempio il telefono). 
+    */  
+    
+    WiFi.mode(WIFI_STA);  
+    
+    /*  
+    *  Inizializza le impostazioni di rete della libreria WiFi e fornisce lo stato corrente della rete, 
+    *  nel caso in esempio ha come parametri ha il nome della rete e la password. 
+    *  Restituisce come valori: 
+    *   
+    *  WL_CONNECTED quando connesso al network 
+    *  WL_IDLE_STATUS quando non connesso al network, ma il dispositivo è alimentato 
+    */  
+    WiFi.config(ip, gateway, subnet);
+    
+    WiFi.begin(ssid, password);  
+    
+    /*  
+    *  fino a quando lo non si è connessi alla WiFi 
+    *  compariranno a distanza di 250 ms dei puntini che 
+    *  evidenziano lo stato di avanzamento della connessione 
+    */    
+    while (WiFi.status() != WL_CONNECTED) {  
+        delay(250);  
+        Serial.print(".");  
+    }  
+    
+    // se connesso alla WiFi stampa sulla serial monitor  
+    // nome della rete e stato di connessione  
+    Serial.println("");  
+    Serial.print  ("Sei connesso ora alla rete: ");  
+    Serial.println(ssid);  
+    Serial.println("WiFi connessa");  
+    
+    // Avvia il server  
+    server.begin();  
+    Serial.println("Server avviato");  
+    
+    // Stampa l'indirizzo IP  
+    Serial.print("Usa questo URL : ");  
+    Serial.print("http://");  
+    Serial.print(WiFi.localIP()); // Restituisce i'IP della scheda  
+    Serial.println("/");  
+
+    ESP.wdtDisable();
+    lastTime = millis();
+
+
+}  
+  
+void loop() {  
+
+
+    if ((millis() - lastTime) > TEMPO_HEARTBEAT){
+        // timeOut
+    //    Serial.println("heartBeat non arrivato, arrivederci!!");  
+        delay(1000);
+        digitalWrite(pinRrst,  LOW);     // rst alto  
+    }
+
+    if ((millis() - lampTime) > TEMPO_LAMP){
+        lampTime = millis();
+        // blink
+        digitalWrite(pinLed,  !digitalRead(pinLed));    
+        ESP.wdtFeed(); // https://techtutorialsx.com/2017/01/21/esp8266-watchdog-functions/
+    }
+
+
+    // Verifica se il client e' connesso  
+    WiFiClient client = server.available();  
+    if (!client) {  
+        return;  
+    }  
+    
+    // Aspetta fino a quando il client invia dei dati  
+    Serial.println("Nuovo client");  
+    while (!client.available()) {  
+        delay(1);  
+    }  
+    Serial.println("client inivato dati");  
+    
+    // Legge la prima richiesta  
+      
+    /*  
+     *  readStringUntil() legge i caratteri dal buffer seriale 
+     * all'interno di una stringa fino a quando non riceve il 
+     * carattere di terminazione in questo cas \r 
+     * oppure si verivica un time out 
+     */  
+       
+    String request = client.readStringUntil('\r');  
+    Serial.println(request);  
+    client.flush();                               // flush() elimina il buffer una volta che  
+                                                  // tutti i caratteri in uscita sono stati inviati.  
+    
+    // Verifica quale richiesta e' stata fatta  
+    
+    /* 
+     * Individua un carattere o una stringa all'interno di un'altra stringa (nell'esempio la strina è request). 
+     * Per impostazione predefinita, ricerche dall'inizio della stringa, 
+     * ma è possibile effettuare la ricerca partendo da un dato indice, 
+     * permettendo di individuare tutte le istanze del carattere o della stringa. 
+     * Se il valore restituito è -1 allora la stringa non è stata trovata. 
+     * 
+     */  
+
+//      char str[] ="GET /;3;124;123;345; HTTP/1.1";
+    if (request.indexOf("/heartBeat") != -1) {  
+        lastTime = millis();
+        Serial.println("cmd heartBeat");
+        
+    }  
+    else{   
+        // chiama con http://192.168.1.166/;2;0;123;123;x
+        // la x finale evita che estrai stringa si perda 
+        //                               0 1   2   3   4        5
+        // estrae da questa stringa  GET /;3;124;123;345;x HTTP/1.1
+        strcpy(str, request.c_str());
+        char * pch;
+        printf ("Splitting string \"%s\" into tokens:\n",str);
+        pch = strtok (str, ";");
+        indice = 0;
+        while ((pch != NULL)&&(indice<5))
+        {
+          printf ("%s\n",pch);
+          dato[indice] = atoi(pch);
+          indice++;
+          pch = strtok (NULL, ";");
+        }
+    }
+
+
+     pixels.clear(); // Set all pixel colors to 'off'
+    // The first NeoPixel in a strand is #0, second is 1, all the way up
+    // to the count of pixels minus one.
+    for(int i=0; i<dato[1]; i++) { // For each pixel...
+        
+        // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+        // Here we're using a moderately bright green color:
+        pixels.setPixelColor(i, pixels.Color(dato[2], dato[3], dato[4]));
+        
+        pixels.show();   // Send the updated pixel colors to the hardware.
+        
+        delay(DELAYVAL); // Pause before next pass through loop
+    }
+    
+
+    // Restituisce la risposta  
+      
+    /* 
+     * La pagina web dovrà essere formattata con la sua intestazione html 
+     * e variando il messaggio che identifica lo stato del LED  
+     */  
+       
+  // intestazione pagina html  
+  client.println("HTTP/1.1 200 OK");  
+  client.println("Content-Type: text/html");  
+  client.println(""); //  non dimenticare questa linea  
+  client.println("<!DOCTYPE HTML>");  
+  client.println("<html>");  
+  
+  // titolo della pagina  
+  client.println("<h2>dati ricevuti</h2>");  
+  
+  // includiamo tutto il testo in un div in cui il font è impostato a 20 px  
+  // N.B. ricorda che per poter considerare le " come stringa e' necessario farle precedere da uno \  
+  client.print("<div style=\"font-size: 20px;\">");  
+  client.print(dato[1]);  
+  client.print("<br>");  
+  client.print(dato[2]);  
+  client.print("<br>");  
+  client.print(dato[3]);  
+  client.print("<br>");  
+  client.print(dato[4]);  
+  client.print("<br>");  
+  
+ 
+  client.print("</div>");  
+  client.println("</html>");  
+  
+// chiusura connessione  
+  delay(1);  
+  Serial.println("Client disconnesso");  
+  Serial.println("");  
+}  
+
 
