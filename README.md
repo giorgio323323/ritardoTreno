@@ -6,6 +6,14 @@ Voglio avere un quadretto dove tre led mi dicono se e di quanto il treno è in r
 Un programma python interroga l'API di Trenitalia. Questo gira su un Raspberry che gestisce alcune funzione casalinghe. La visulazzazione è a carico di un ESP8266 che lavora come server Http facendo quello che il Raspberry gli dice.
 
 
+# ESP server
+
+ avvia un server su indirizzo fisso
+ chiama con http://192.168.1.166/;2;0;123;123;x
+ 2: numero di led da accendere (1-4)
+ 0;123;123: RGB del colore led
+ x: ? senza si impalla tutto
+
 # Riferimenti
 https://github.com/bluviolin/TrainMonitor/wiki/API-del-sistema-Viaggiatreno
 
