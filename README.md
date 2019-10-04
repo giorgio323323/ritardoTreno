@@ -10,8 +10,13 @@ Un programma python interroga l'API di Trenitalia. Questo gira su un Raspberry c
 
  avvia un server su indirizzo fisso
  chiama con http://192.168.1.166/;2;0;123;123;x
+ 
+ argomenti:
+ 
  2: numero di led da accendere (1-4)
+ 
  0;123;123: RGB del colore led
+ 
  x: ? senza si impalla tutto
 
 # Riferimenti
