@@ -1,16 +1,6 @@
 /* 
  * https://www.arduino.cc/en/Reference/WiFi 
  * https://github.com/esp8266 
- 
- avvia un server su indirizzo fisso
- chiama con http://192.168.1.166/;2;0;123;123;x
- 2: numero di led da accendere (1-4)
- 0;123;123: RGB del colore led
- x: ? senza si impalla tutto
- 
- c'è il watchDog software che resetta il sistema in caso di impallo
- 
- 
 
 wemos D1 R2 & mini
 cose da aggiungere
@@ -91,15 +81,15 @@ int pinRrst  = D0;
 long lastTime, tempoChiusura, lampTime;
 
 char str[50];
-int dato[10];
+int dato[20];
 int indice;
  
 void setup() {  
     Serial.begin(115200);           // inizializzazione Serial Monitor  
     delay(10);  
     
-    Serial.println("\nC:\\Users\\giorgio.rancilio\\Dropbox\\MakersPgo\\iot\\wemos\\webServer");
-    Serial.println("09apr18");
+    Serial.println("/home/giorgio/Documents/ritardoTRENO");
+    Serial.println("06ott19");
     
     pinMode(  pinLed, OUTPUT);    
     pinMode(pinRrst, OUTPUT);    
@@ -170,6 +160,19 @@ void setup() {
     Serial.print(WiFi.localIP()); // Restituisce i'IP della scheda  
     Serial.println("/");  
 
+     pixels.clear(); // Set all pixel colors to 'off'
+    // The first NeoPixel in a strand is #0, second is 1, all the way up
+    // to the count of pixels minus one.
+    for(int i=0; i<4; i++) { // For each pixel...
+        
+        // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+        // Here we're using a moderately bright green color:
+        pixels.setPixelColor(i, pixels.Color(55, 55, 55));
+    }
+    pixels.show();   // Send the updated pixel colors to the hardware.
+
+    delay(1000);
+
     ESP.wdtDisable();
     lastTime = millis();
 
@@ -202,7 +205,7 @@ void loop() {
     
     // Aspetta fino a quando il client invia dei dati  
     Serial.println("Nuovo client");  
-    while (!client.available()) {  
+    if (!client.available()) {  
         delay(1);  
     }  
     Serial.println("client inivato dati");  
@@ -239,16 +242,19 @@ void loop() {
         
     }  
     else{   
-        // chiama con http://192.168.1.166/;2;0;123;123;x
-        // la x finale evita che estrai stringa si perda 
-        //                               0 1   2   3   4        5
-        // estrae da questa stringa  GET /;3;124;123;345;x HTTP/1.1
+
+        /*
+          chiama con http://192.168.1.166/;0;123;123;0;123;123;0;123;123;0;123;123;
+          rgb led0, rgb led1 rgb led 2 rgb led 3
+          
+        */
         strcpy(str, request.c_str());
         char * pch;
         printf ("Splitting string \"%s\" into tokens:\n",str);
         pch = strtok (str, ";");
+        pch = strtok (NULL, ";");
         indice = 0;
-        while ((pch != NULL)&&(indice<5))
+        while ((pch != NULL)&&(indice<13))
         {
           printf ("%s\n",pch);
           dato[indice] = atoi(pch);
@@ -258,19 +264,17 @@ void loop() {
     }
 
 
-     pixels.clear(); // Set all pixel colors to 'off'
+    pixels.clear(); // Set all pixel colors to 'off'
+    pixels.show();   // Send the updated pixel colors to the hardware.
     // The first NeoPixel in a strand is #0, second is 1, all the way up
     // to the count of pixels minus one.
-    for(int i=0; i<dato[1]; i++) { // For each pixel...
+    for(int i=0; i<4; i++) { // For each pixel...
         
         // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
         // Here we're using a moderately bright green color:
-        pixels.setPixelColor(i, pixels.Color(dato[2], dato[3], dato[4]));
-        
-        pixels.show();   // Send the updated pixel colors to the hardware.
-        
-        delay(DELAYVAL); // Pause before next pass through loop
+        pixels.setPixelColor(i, pixels.Color(dato[3*i+0], dato[3*i+1], dato[3*i+2]));
     }
+    pixels.show();   // Send the updated pixel colors to the hardware.
     
 
     // Restituisce la risposta  
@@ -293,13 +297,32 @@ void loop() {
   // includiamo tutto il testo in un div in cui il font è impostato a 20 px  
   // N.B. ricorda che per poter considerare le " come stringa e' necessario farle precedere da uno \  
   client.print("<div style=\"font-size: 20px;\">");  
+  client.print(dato[0]);  
+  client.print(", ");  
   client.print(dato[1]);  
-  client.print("<br>");  
+  client.print(", ");  
   client.print(dato[2]);  
   client.print("<br>");  
+  
   client.print(dato[3]);  
-  client.print("<br>");  
+  client.print(", ");  
   client.print(dato[4]);  
+  client.print(", ");  
+  client.print(dato[5]);  
+  client.print("<br>");  
+  
+  client.print(dato[6]);  
+  client.print(", ");  
+  client.print(dato[7]);  
+  client.print(", ");  
+  client.print(dato[8]);  
+  
+  client.print("<br>");  
+  client.print(dato[9]);  
+  client.print(", ");  
+  client.print(dato[10]);  
+  client.print(", ");  
+  client.print(dato[11]);  
   client.print("<br>");  
   
  
@@ -311,5 +334,3 @@ void loop() {
   Serial.println("Client disconnesso");  
   Serial.println("");  
 }  
-
-
